@@ -49,15 +49,18 @@ class Stage extends PropsLookingTree {
         layers.border   = layers.border || scene.add.layer();
         layers.main     = layers.main   || scene.add.layer();
 
+        
+    
+        const borderCol = maxCol + 2, borderRow = maxRow + 2;
         const quickAdd = (layer, col, row, key, config) => {
+            col = positiveModulo(col, borderCol);
+            row = positiveModulo(row, borderRow);
             const { x, y } = this.convert(col, row);
             const { origin, depth, addEntity } = config || { };
             addEntity && this.setEntity(col, row, voidEntity);
 
             return addToLayer(setDepth(setOrigin(scene.add.image(x, y, atlasKey, key), origin, scale), depth), layer);
         }
-    
-        const borderCol = maxCol + 1, borderRow = maxRow + 1;
         const voidEntity = { callback: () => {} };
         // create floor
         for (let row = 0; row < borderRow; row++) for (let col = 0; col < borderCol; col++) {
@@ -69,16 +72,16 @@ class Stage extends PropsLookingTree {
 
         for (let row = 0; row < borderRow; row++) {
             quickAdd(layers.border, 0, row, 'wall4', config);
-            quickAdd(layers.border, borderCol, row, 'wall5', config);
+            quickAdd(layers.border, -1, row, 'wall5', config);
         }
         for (let col = 0; col < borderCol; col++) {
             quickAdd(layers.border, col, 0, 'wall2', config);
-            quickAdd(layers.border, col, borderRow, 'wall7', config);
+            quickAdd(layers.border, col, -1, 'wall7', config);
         }
         quickAdd(layers.border, 0, 0, 'wall1', config);
-        quickAdd(layers.border, borderCol, 0, 'wall3', config);
-        quickAdd(layers.border, 0, borderRow, 'wall6', config);
-        quickAdd(layers.border, borderCol, borderRow, 'wall8', config);
+        quickAdd(layers.border, -1, 0, 'wall3', config);
+        quickAdd(layers.border, 0, -1, 'wall6', config);
+        quickAdd(layers.border, -1, -1, 'wall8', config);
 
         // create solid
         groups.solid = groups.solid || scene.physics.add.staticGroup();

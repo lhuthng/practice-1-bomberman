@@ -55,3 +55,7 @@ const permutateWords = (pool) => {
     }
     return result;
 }
+
+const positiveModulo = (dividend, divisor) => {
+    return (dividend % divisor + divisor) % divisor;
+}
