@@ -18,35 +18,38 @@ class Demo extends Phaser.Scene {
         this.anims.createFromAseprite('apprentice');
         this.anims.createFromAseprite('bombtion');
         this.anims.createFromAseprite('flame');
-        this.stage = new Stage(0, 0, 16, 14, { 
-            scale: 3
-        }).create(this, this.layers, this.groups, 'demo-stage', 9, 9);
+        this.stage = new Stage(
+            this,
+            this.layers,
+            this.groups,
+            0, 14 * 2,
+            'demo-stage',
+            'solid',
+            16, 14,
+            15, 15,
+            2,
+        )
 
-        // this.character = new Character(this, this.layers, this.groups, this.players.controlable, 'apprentice', this.stage, 1, 1, { scale: 3, origin: { x: 0.5, y: 1, dy: -2 } });
-        this.character = new Character(this.stage, 'apprentice', { 
-            scale: 3, 
-            origin: {x: 0.5, y: 1, dy: -4 },
-            weaponKey: 'bombtion'
-        }).create(1, 1);
+        this.character = new Character(
+            this.stage,
+            1, 1,
+            'apprentice',
+        )
 
         const leftKey = this.input.keyboard.addKey('left');
         const rightKey = this.input.keyboard.addKey('right');
         const downKey = this.input.keyboard.addKey('down');
         const upKey = this.input.keyboard.addKey('up');
         const spaceKey = this.input.keyboard.addKey('space');
-        
-        // this.controller = new Controller(this, this.character, this.stage, { leftKey, rightKey, downKey, upKey, spaceKey });
+                
         this.controller = new Controller(this.character)
             .create({ leftKey, rightKey, downKey, upKey, spaceKey });
-        this.getTime = () => new Date().getTime();
-        this.prevTime = this.getTime();
     }
 
     update() {
-        const deltaTime = this.getTime() - this.prevTime;
-        this.prevTime = this.getTime();
-        this.controller.update(deltaTime);
-        this.character.update(deltaTime);
+        // console.log(this.input.mousePointer.x, this.input.mousePointer.y);
+        this.controller.update();
+        this.character.update();
     }
 }
 
@@ -60,7 +63,7 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            debug: true
+            debug: false
         }
     },
     scene: [ Demo ]
