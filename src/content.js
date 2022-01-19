@@ -12,8 +12,15 @@ const presets = {
     config: {
         'apprentice': { origin: {...MBOrigin, dy: -4} },
         'bombtion': { origin: {...MBOrigin, dy: -4} },
-        'flame': { origin: {...MBOrigin, dy: -3} }
+        'flame': { origin: {...MBOrigin, dy: -3} },
+        'quantity': { origin: {...MBOrigin} }, 
+        'quality': { origin: {...MBOrigin} },
     }
+}
+
+const upgrades = {
+    quality: (character) => { character.stats.power++; },
+    quantity: (character) => { character.stats.remains += 1; }
 }
 
 
@@ -36,14 +43,18 @@ class Stage extends PropsLookingTree {
         this.groups = groups;
         this.entities = [];
         this.props = {
-            x, y, cellWidth, cellHeight, maxRow, maxCol, scale
+            x, y, cellWidth, cellHeight, maxRow, maxCol, scale,
+            characters: []
         }
 
         this.convert = this.convert.bind(this);
         this.convertToCenter = this.convertToCenter.bind(this);
+        this.convertToMiddleBottom = this.convertToMiddleBottom.bind(this);
         this.revert = this.revert.bind(this);
         this.getEntity = this.getEntity.bind(this);
+        this.getEntityProp = this.getEntityProp.bind(this);
         this.setEntity = this.setEntity.bind(this);
+        this.setCharacter = this.setCharacter.bind(this);
 
         layers.floor    = layers.floor  || scene.add.layer();
         layers.border   = layers.border || scene.add.layer();
@@ -52,6 +63,7 @@ class Stage extends PropsLookingTree {
         
     
         const borderCol = maxCol + 2, borderRow = maxRow + 2;
+        const voidEntity = { callback: function() { }, scope: undefined };
         const quickAdd = (layer, col, row, key, config) => {
             col = positiveModulo(col, borderCol);
             row = positiveModulo(row, borderRow);
@@ -61,7 +73,6 @@ class Stage extends PropsLookingTree {
 
             return addToLayer(setDepth(setOrigin(scene.add.image(x, y, atlasKey, key), origin, scale), depth), layer);
         }
-        const voidEntity = { callback: () => {} };
         // create floor
         for (let row = 0; row < borderRow; row++) for (let col = 0; col < borderCol; col++) {
             quickAdd(layers.floor, col, row, `grass${(row + col) % 2 + 1}`);
@@ -85,6 +96,7 @@ class Stage extends PropsLookingTree {
 
         // create solid
         groups.solid = groups.solid || scene.physics.add.staticGroup();
+        groups.static = groups.static || scene.physics.add.staticGroup();
         config = {...config, origin: LBOrigin };
         for (let col = 2; col < maxCol; col += 2) for (let row = 2; row < maxRow; row += 2) {
             const image = quickAdd(layers.main, col, row, solidKey, config);
@@ -92,7 +104,39 @@ class Stage extends PropsLookingTree {
             groups.solid.add(image);
             setBodyRect(image.body, cellWidth, cellHeight, 0, image.height - cellHeight, scale);
         }
-        console.log(this.entities);
+
+        // create obstacles
+        const obstacleCallback = () => { };
+        for (let col = 1; col <= maxCol; col++) for (let row = 1; row <= maxRow; row++) {
+            if (this.getEntity(col, row) === undefined && Math.random() <= 0.6) {
+                const entity = {
+                    callback: obstacleCallback,
+                    mask: 0,    // 0bULDR
+                }
+                const check = (colOffset, rowOffset, position) => {
+                    const checkEntity = this.getEntity(col + colOffset, row + rowOffset);
+                    if (checkEntity && checkEntity.callback === obstacleCallback) {
+                        entity.mask |=  1 << position;
+                        checkEntity.mask |= 1 << (position - 2);
+                    }
+                }
+                check(-1, 0, 2);
+                check(0, -1, 3);
+                this.setEntity(col, row, entity);
+            }
+        }
+
+        for (let col = 1; col <= maxCol; col++) for (let row = 1; row <= maxRow; row++) {
+            const entity = this.getEntity(col, row);
+            if (entity && entity.callback == obstacleCallback) {
+                const postfix = removeZeroBits(0b1101 & entity.mask) + 1;
+                const block = new Block(this, col, row, atlasKey, 'bush');
+                entity.callback = block.destroy;
+                entity.isBlock = true;
+            }
+        }
+
+        groups.characters = groups.characters || scene.add.group();
     }
 
     convert(col, row) {
@@ -111,6 +155,13 @@ class Stage extends PropsLookingTree {
         return result;
     }
 
+    convertToMiddleBottom(col, row) {
+        const { cellWidth, cellHeight, scale } = this.props;
+        const result = this.convert(col, row);
+        result.x += cellWidth / 2 * scale;
+        return result;
+    }
+
     revert(x, y) {
         const { cellWidth, cellHeight, scale } = this.props;
         return {
@@ -123,17 +174,33 @@ class Stage extends PropsLookingTree {
         return this.entities[col * (this.props.maxRow + 2) + row];
     }
 
+    getEntityProp(col, row, name) {
+        const entity = this.getEntity(col, row);
+        return entity && entity[name];
+    }
+
     setEntity(col, row, entity) {
         this.entities[col * (this.props.maxRow + 2) + row] = entity;
+    }
+
+    setCharacter(col, row, character) {
+        const remove = (offsetCol, offsetRow) => {
+            const entity = this.getEntity(col + offsetCol, row + offsetRow);
+            if (entity !== undefined && entity.isBlock === true) entity.callback(true);
+        }
+        remove(0, 0); remove(0, 1); remove(1, 0); remove(0, -1); remove(-1, 0);
+        this.props.characters.push(character);
     }
 }
 
 class Character extends PropsLookingTree {
-    constructor(stage, row, col, key) {
+    constructor(stage, col, row, key) {
         super(stage);
 
-        const { origin, colliderRadius} = presets.config[key];
+        const config = presets.config[key] || { }; 
+        const { origin, colliderRadius} = config;
 
+        stage.setCharacter(col, row, this);
         this.stage = stage;
         this.props = {
             key,
@@ -145,18 +212,28 @@ class Character extends PropsLookingTree {
         };
         this.stats = {
             speed: 45,
-            weaponSpeed: 5,
-            power: 3
+            weaponSpeed: 3,
+            power: 2,
+            remains: 1,
         }
 
         const { x, y } = stage.convertToCenter(row, col);
         const sprite = stage.scene.physics.add.sprite(x, y, key);
+        sprite._character = this;
         stage.layers.main.add(sprite);
         sprite.play({ key: key + '-still' + this.props.direction.face + this.props.direction.side, repeat: -1 });
         setDepth(setOrigin(sprite, origin, this.props.scale), y);
         setBodyCircle(sprite.body, 4, sprite.width * sprite.originX, sprite.height * sprite.originY);
         sprite.body.setCollideWorldBounds(true);
         stage.scene.physics.add.collider(sprite, stage.groups.solid);
+
+        stage.scene.physics.add.overlap(sprite, stage.groups.static, (character, powerUp) => {
+            character = sprite._character;
+            powerUp = powerUp._powerUp;
+            powerUp.upgrade(character);
+            powerUp.destroy();
+        })
+
         this.sprite = sprite;
 
         this.update = this.update.bind(this);
@@ -192,24 +269,25 @@ class Character extends PropsLookingTree {
 
     place() {
         const { col, row } = this.stage.revert(this.sprite.x, this.sprite.y);
-        if (this.stage.getEntity(col, row) === undefined) {
+        if (this.stats.remains > 0 && this.stage.getEntity(col, row) === undefined) {
             const key = this.props.key;
-            new Weapon(this, col, row, presets.weapon[key], this.stats.power, this.stats.weaponSpeed);
+            this.stats.remains -= 1;
+            new Weapon(this, col, row, presets.weapon[key], this.stats.power, this.stats.weaponSpeed, () => { this.stats.remains += 1; });
         }
     }
 }
 
 class Weapon extends PropsLookingTree {
-    constructor(source, col, row, key, power, triggerTime) {
+    constructor(source, col, row, key, power, triggerTime, callback) {
         super(source);
 
-        const config = presets.config[key];
+        const config = presets.config[key] || { };
 
         this.source = source;
         this.stage = this.source.stage;
         this.isActive = true;
         this.props = {
-            col, row, key, power,
+            col, row, key, power, callback,
             scale: config.scale || source.props.scale || 1
         };
         this.trigger = this.trigger.bind(this);
@@ -217,6 +295,12 @@ class Weapon extends PropsLookingTree {
         const stage = source.stage;
         const { x, y } = stage.convertToCenter(col, row);
         const sprite = stage.scene.add.sprite(x, y)
+        // const sprite = stage.scene.physics.add.sprite(x, y);
+        stage.groups.solid.add(sprite);
+        // this.stage.scene.physics.add.collider(source.sprite, sprite);
+        // this.stage.characters.forEach(character => {
+
+        // });
         sprite.play({ key: key + '-charge', repeat: -1 });
         setOrigin(setDepth(sprite, sprite.y), config.origin, this.props.scale);
         stage.layers.main.add(sprite);
@@ -229,6 +313,7 @@ class Weapon extends PropsLookingTree {
     trigger() {
         if (this.isActive) {
             this.isActive = false;
+            if (this.props.callback !== undefined) this.props.callback();
             const { col: rootCol, row: rootRow } = this.props;
             this.stage.setEntity(rootCol, rootRow, undefined);
             const blastKey = presets.blast[this.props.key]
@@ -237,10 +322,9 @@ class Weapon extends PropsLookingTree {
                 for (let power = 1; power < this.props.power; power++) {
                     const col = rootCol + dir[0] * power, row = rootRow + dir[1] * power;
                     const entity = this.stage.getEntity(col, row);
-                    if (entity === undefined) {
+                    if (entity === undefined || entity.callback()) {
                         new Explosion(this, col, row, blastKey);
                     } else {
-                        entity.callback();
                         break;
                     }
                 }
@@ -254,7 +338,7 @@ class Explosion extends PropsLookingTree {
     constructor(weapon, col, row, key) {
         super(weapon);
 
-        const config = presets.config[key];
+        const config = presets.config[key] || { };
 
         this.props = {
             key,
@@ -273,8 +357,40 @@ class Explosion extends PropsLookingTree {
 }
 
 class Block extends PropsLookingTree {
-    constructor(stage, key) {
+    constructor(stage, col, row, atlasKey, key) {
         super(stage);
+        
+        const config = presets.config[key] || { };
+
+        this.stage = stage;
+        this.props = {
+            col, row, atlasKey, key,
+            scale: config.scale || stage.props.scale
+        };
+
+        const { x, y } = stage.convert(col, row);
+        this.image = stage.scene.add.image(x, y, atlasKey, key);
+        setOrigin(setDepth(this.image, y), config.origin, this.props.scale);
+        stage.layers.main.add(this.image);
+        stage.groups.solid.add(this.image);
+        setBodyRect(this.image.body, stage.props.cellWidth, stage.props.cellHeight, 0, this.image.height - stage.props.cellHeight, this.props.scale);
+
+        this.destroy = this.destroy.bind(this);
+    }
+
+    destroy(instant = false) {
+        this.image.destroy();
+        this.stage.setEntity(this.props.col, this.props.row, undefined);
+        if (instant === true) {
+            
+        }
+        else {
+            const { col, row, atlasKey } = this.props;
+            const random = Math.random() * 6;
+            if (random < 1) new PowerUp(this.stage, col, row, atlasKey, 'quality');
+            else if (random < 2) new PowerUp(this.stage, col, row, atlasKey, 'quantity');
+        }
+        return false;
     }
 }
 
@@ -285,7 +401,7 @@ class Item extends PropsLookingTree {
     }
 }
 
-class Controller extends PropsLookingTree {
+class DirectController extends PropsLookingTree {
     constructor(character) {
         super(character);
         
@@ -327,5 +443,38 @@ class Controller extends PropsLookingTree {
             velocity.x =  0;
             velocity.y = 0;
         }
+    }
+}
+
+class PowerUp extends PropsLookingTree {
+    constructor(stage, col, row, atlasKey, key) {
+        super(stage);
+
+        const config = presets.config[key] || { };
+
+        this.stage = stage;
+        this.upgrade = upgrades[key];
+        this.props = {
+            col, row, key,
+            scale: config.scale || stage.props.scale
+        };
+
+        const { x, y } = stage.convertToMiddleBottom(col, row);
+        this.image = stage.scene.add.image(x, y, atlasKey, key);
+        this.image._powerUp = this;
+        setOrigin(setDepth(this.image, y), config.origin, this.props.scale);
+        stage.layers.main.add(this.image);
+        stage.groups.static.add(this.image);
+        setBodyRect(this.image.body, stage.props.cellWidth - 2, stage.props.cellHeight, 1, this.image.height - stage.props.cellHeight + 1, this.props.scale);
+        this.image.onCollide = false;
+        this.destroy = this.destroy.bind(this);
+        const entity = { callback: this.destroy }
+        this.stage.setEntity(col, row, entity);
+
+    }
+    destroy() {
+        this.image.destroy();
+        this.stage.setEntity(this.props.col, this.props.row, undefined);
+        return true;
     }
 }

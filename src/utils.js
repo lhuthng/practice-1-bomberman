@@ -59,3 +59,12 @@ const permutateWords = (pool) => {
 const positiveModulo = (dividend, divisor) => {
     return (dividend % divisor + divisor) % divisor;
 }
+
+const removeZeroBits = (number) => {
+    let count = 0;
+    while (number !== 0) {
+        number &= (number - 1);
+        count += 1;
+    }
+    return (1 << count) - 1;
+}

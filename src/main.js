@@ -26,8 +26,8 @@ class Demo extends Phaser.Scene {
             'demo-stage',
             'solid',
             16, 14,
-            15, 15,
-            2,
+            9, 9,
+            3,
         )
 
         this.character = new Character(
@@ -42,7 +42,7 @@ class Demo extends Phaser.Scene {
         const upKey = this.input.keyboard.addKey('up');
         const spaceKey = this.input.keyboard.addKey('space');
                 
-        this.controller = new Controller(this.character)
+        this.controller = new DirectController(this.character)
             .create({ leftKey, rightKey, downKey, upKey, spaceKey });
     }
 
@@ -63,7 +63,7 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            debug: false
+            debug: true
         }
     },
     scene: [ Demo ]
