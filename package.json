@@ -1,0 +1,26 @@
+{
+  "name": "practice-1-bomberman",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lhuthng/practice-1-bomberman.git"
+  },
+  "keywords": [
+    "phaser",
+    "nodejs"
+  ],
+  "author": "lhuthng",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lhuthng/practice-1-bomberman/issues"
+  },
+  "homepage": "https://github.com/lhuthng/practice-1-bomberman#readme",
+  "dependencies": {
+    "express": "^4.17.2"
+  }
+}
